@@ -317,7 +317,6 @@ void main(void){
 
 	StartTimeCount();
     while (1){
-		
 		TaskEuart();
 		TaskIrReceive();
 		
@@ -341,7 +340,6 @@ void main(void){
 				SendEuart('S');
 				SendEuart(*p);
 			}
-			
 		}
 	}
 }
