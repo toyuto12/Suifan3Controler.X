@@ -70,14 +70,14 @@ void TMR1_Initialize(void)
     //GSS T1G_pin; 
     T1GATE = 0x00;
 
-    //CS FOSC/4; 
-    T1CLK = 0x01;
+    //CS LFINTOSC; 
+    T1CLK = 0x04;
 
-    //TMR1H 0; 
-    TMR1H = 0x00;
+    //TMR1H 134; 
+    TMR1H = 0x86;
 
-    //TMR1L 0; 
-    TMR1L = 0x00;
+    //TMR1L 232; 
+    TMR1L = 0xE8;
 
     // Clearing IF flag.
     PIR4bits.TMR1IF = 0;
@@ -85,8 +85,8 @@ void TMR1_Initialize(void)
     // Load the TMR value to reload variable
     timer1ReloadVal=(uint16_t)((TMR1H << 8) | TMR1L);
 
-    // CKPS 1:4; nT1SYNC do_not_synchronize; TMR1ON enabled; T1RD16 enabled; 
-    T1CON = 0x27;
+    // CKPS 1:1; nT1SYNC do_not_synchronize; TMR1ON enabled; T1RD16 enabled; 
+    T1CON = 0x07;
 }
 
 void TMR1_StartTimer(void)

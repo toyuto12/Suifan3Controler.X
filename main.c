@@ -112,33 +112,6 @@ void TaskIrReceive(void){
 			IrPos = -1;
 		}
 	}
-	
-#if 0
-	if( HighWidth > (T_TIMEBASE/2) ){
-		if( RANGE( LowWidth,T_TIMEBASE *16,(T_TIMEBASE *4)) ){
-			if( RANGE(HighWidth,(T_TIMEBASE *8),(T_TIMEBASE *1)) ){		// Header?
-				IrPos = 0;
-			}
-		}else if( RANGE(LowWidth, T_TIMEBASE, (T_TIMEBASE/2) )){
-			if( IrPos != -1 ){
-				if( HighWidth < (T_TIMEBASE*2) ){
-					IrTmp = (IrTmp>>1);
-				}else{
-					IrTmp = 0x80000000 | (IrTmp>>1);
-				}
-
-				if( IrPos < 31 ) IrPos ++;
-				else{
-					sComm.dat32 = IrTmp;
-					IsIrReceived = 1;
-					IrPos = -1;
-				}
-			}
-		}
-		LowWidth = 0;
-		HighWidth = 0;
-	}
-#endif
 }
 
 #define SW_TIM	100
@@ -147,34 +120,37 @@ void TaskInput( stInput *dat ){
 	uint8_t *pTim = Tim;
 	
 	if( iSW_FANON ){
-		if( *pTim <= SW_TIM) *pTim ++;
+		if( *pTim <= SW_TIM) *pTim += 1;
 	}else *pTim = 0;
 	dat->FanOn = (*pTim==SW_TIM) ?1 :0 ;
 
 	pTim ++;
 	if( iSW_FANMAIN ){
-		if( *pTim <= SW_TIM) *pTim ++;
+		if( *pTim <= SW_TIM) *pTim += 1;
 	}else *pTim = 0;
 	dat->FanMove = (*pTim==SW_TIM) ?1 :0 ;
 	
 	pTim ++;
 	if( iSW_FANLR ){
-		if( *pTim <= SW_TIM) *pTim ++;
-	}else *pTim = 0;
-	dat->LROn = (*pTim==SW_TIM) ?1 :0 ;
+		if( *pTim < SW_TIM ) *pTim += 1;
+		else dat->LROn = 1;
+	}else{
+		if( *pTim!=0 ) *pTim -= 1;
+		else dat->LROn = 0;
+	}
 
 	pTim ++;
 	if( iSW_TIMER ){
-		if( *pTim <= SW_TIM ) *pTim ++;
+		if( *pTim <= SW_TIM ) *pTim += 1;
 	}else *pTim = 0;
 	dat->Timer = (*pTim==SW_TIM) ?1 :0 ;
 	
 	pTim ++;
 	if( iSW_FANUD ){
-		if( *pTim < SW_TIM ) *pTim ++;
+		if( *pTim < SW_TIM ) *pTim += 1;
 		else dat->UDOn = 1;
 	}else{
-		if( *pTim!=0 ) *pTim --;
+		if( *pTim!=0 ) *pTim -= 1;
 		else dat->UDOn = 0;
 	}
 }
@@ -182,31 +158,15 @@ void TaskInput( stInput *dat ){
 // Timer1 1SecCounterInitial
 uint16_t sOffCount;
 uint8_t isOfftimerEnd;
-#define TIMER1_1SEC		7750
-#ifndef TDD
-void InitTimeCount(void){
-	T1CONbits.ON = false;
-	
-	T1CONbits.CKPS = 0b10;	// Prescale 1/4
-	T1CONbits.RD16 = false;
-	
-	T1GCONbits.GE = false;	// GateOff
-	
-	T1CLKbits.CS = 0b0100;	// LFINTOSC(31kHz)
-	
-	TMR1 = 0;
-}
-#endif
+#define TIMER1_1SEC		(0x86E8/120)
 
 uint8_t IsTime1Sec(void){
 	uint16_t tmr = TMR1;
 	
 	if( tmr >= TIMER1_1SEC ){
-		uint8_t h,l;
 		tmr = tmr -TIMER1_1SEC;
-		h = tmr>>8;	l = tmr;
 		T1CONbits.ON = false;
-		TMR1H = h;	TMR1L = l;
+		TMR1 = tmr;
 		T1CONbits.ON = true;
 		return true;
 	}else return false;
@@ -216,10 +176,13 @@ void StartTimeCount(void){
 	T1CONbits.ON = true;
 }
 
+uint8_t LedOffTime = 0;
 void DispOffTimerLevel( uint16_t offTimerValue ){
-	uint8_t lv;		// 7200 = 2H
-	if( offTimerValue == 0 ) lv = 0;
-	else lv = (offTimerValue +(7200-1)) /7200 ;
+	uint8_t lv = 0;		// 7200 = 2H
+	
+	if( LedOffTime ) LedOffTime--;
+	else if( offTimerValue == 0 ) lv = 0;
+	else lv = ((offTimerValue-1) /7200) +1;
 
 	oLED_OFFTIMER2 = (lv==1) ?1 :0 ;
 	oLED_OFFTIMER4 = (lv==2) ?1 :0 ;
@@ -290,6 +253,7 @@ uint8_t IsOffTime(void){
 
 void ContFanValue( uint8_t code, stInput *in, stCommData *out ){
 	static uint8_t exCode = 0;
+	static uint8_t exLRData;
 	uint8_t plsCode;
 	
 	if( exCode != code ){
@@ -307,13 +271,19 @@ void ContFanValue( uint8_t code, stInput *in, stCommData *out ){
 		else out->FanLevel = 1;
 	}
 
-	if( in->LROn || (plsCode==4) ) out->LRFanOn ^= 1;
-
+	if( plsCode == 4 ) exLRData ^= 1;
+	if( in->LROn ) exLRData = 0;
+	out->LRFanOn = ( in->LROn || exLRData ) ?1 :0 ;
+	
 	out->UDFanOn = ( in->UDOn || (exCode==5) ) ?1 :0 ;
 	
 	if( in->Timer || (plsCode==3) ){
-		if( sOffCount > (3600*6) )sOffCount = 0;
-		sOffCount = sOffCount -(sOffCount%7200) +7200;
+		if( sOffCount < (7200 -60)) sOffCount = 7200;
+		else if( sOffCount < (7200*2 -60)) sOffCount = 7200*2;
+		else if( sOffCount < (7200*3 -60)) sOffCount = 7200*3;
+		else if( sOffCount < (7200*4 -60)) sOffCount = 7200*4;
+		else sOffCount = 0;
+		LedOffTime = 100;
 	}else if( IsOffTime() ){
 		out->FanLevel = 0;
 	}
@@ -321,6 +291,7 @@ void ContFanValue( uint8_t code, stInput *in, stCommData *out ){
 	if( !out->FanLevel ){
 		out->LRFanOn = 0;
 		out->UDFanOn = 0;
+		sOffCount = 0;
 	}
 }
 
@@ -340,13 +311,11 @@ void main(void){
 	TMR0_SetInterruptHandler(isrTimer0);
 	CCP5_SetCallBack(isrCcp1);
 	TMR3_StartTimer();
-//	InitTimeCount();
 	
     INTERRUPT_GlobalInterruptEnable();
     INTERRUPT_PeripheralInterruptEnable();
-
-	
-//	StartTimeCount();
+			
+	StartTimeCount();
     while (1){
 		TaskEuart();
 		TaskIrReceive();
@@ -354,10 +323,12 @@ void main(void){
 		if( gInterval ){
 			gInterval --;
 						
-//			TaskOfftimer();
+			TaskOfftimer();
 			TaskInput( &gIn );
-			
 			ReadIrData( &IrCode );
+			
+			oLED_MAIN_HIGH = gIn.FanOn;
+			
 			ContFanValue( IrCode, &gIn, &gComm );
 			
 			DispOffTimerLevel( sOffCount );
