@@ -56,25 +56,32 @@ void isrTimer0(void){
 
 uint8_t sNowPoly;
 uint16_t HighWidth,LowWidth;
+uint16_t PulseWidth;
 // IrPulseReceive
 #ifndef TDD
 void isrCcp1( uint16_t val ){
-	TMR1 = 0;
+	TMR3_WriteTimer(0);
 	
-	if( PIR4bits.TMR1IF ){
-		PIR4bits.TMR1IF = 0;
+	if( PIR4bits.TMR3IF ){
+		PIR4bits.TMR3IF = 0;
 		val = 0;
 	}
 	
+	PulseWidth = val;
+
+#if 0
 	if( sNowPoly == 1 ){		// Low -> High
 		CCP1CONbits.MODE = 4;		// Set FallingEdge
 		HighWidth = val;
 		sNowPoly = 0;
+		oLED_MAIN_HIGH = 1;
 	}else{						// High -> Low
 		CCP1CONbits.MODE = 5;		// Set RisingEdge
 		LowWidth = val;
 		sNowPoly = 1;
+		oLED_MAIN_HIGH = 0;
 	}
+#endif
 }
 #endif
 
@@ -82,11 +89,33 @@ void isrCcp1( uint16_t val ){
 
 stIrCommData sComm;
 uint8_t IsIrReceived,IrPos=-1;
-uint32_t IrTmp;
-#define T_TIMEBASE	2248			// T = 562us
+uint32_t IrTmp=0;
+#define T_TIMEBASE	850				// T = 425us
 void TaskIrReceive(void){
+	if( RANGE(PulseWidth, T_TIMEBASE*24, T_TIMEBASE*2)){
+			IrPos = 0;
+			PulseWidth = 0;
+	}else if( (IrPos != -1) && PulseWidth ){
+		IrPos ++;
+		if( RANGE( PulseWidth, T_TIMEBASE*4, T_TIMEBASE )){
+			IrTmp = 0x80000000 | (IrTmp>>1);
+		}else if( RANGE( PulseWidth, T_TIMEBASE*2, T_TIMEBASE )){
+			IrTmp = IrTmp>>1;
+		}else{
+			IrPos = -1;
+		}
+		PulseWidth = 0;
+		
+		if( IrPos == 32 ){
+			sComm.dat32 = IrTmp;
+			IsIrReceived = 1;
+			IrPos = -1;
+		}
+	}
+	
+#if 0
 	if( HighWidth > (T_TIMEBASE/2) ){
-		if( RANGE( LowWidth,T_TIMEBASE *16,(T_TIMEBASE *2)) ){
+		if( RANGE( LowWidth,T_TIMEBASE *16,(T_TIMEBASE *4)) ){
 			if( RANGE(HighWidth,(T_TIMEBASE *8),(T_TIMEBASE *1)) ){		// Header?
 				IrPos = 0;
 			}
@@ -109,6 +138,7 @@ void TaskIrReceive(void){
 		LowWidth = 0;
 		HighWidth = 0;
 	}
+#endif
 }
 
 #define SW_TIM	100
@@ -309,21 +339,22 @@ void main(void){
     SYSTEM_Initialize();
 	TMR0_SetInterruptHandler(isrTimer0);
 	CCP5_SetCallBack(isrCcp1);
-	TMR1_StartTimer();
-	InitTimeCount();
+	TMR3_StartTimer();
+//	InitTimeCount();
 	
     INTERRUPT_GlobalInterruptEnable();
     INTERRUPT_PeripheralInterruptEnable();
 
-	StartTimeCount();
+	
+//	StartTimeCount();
     while (1){
 		TaskEuart();
 		TaskIrReceive();
 		
 		if( gInterval ){
 			gInterval --;
-			
-			TaskOfftimer();
+						
+//			TaskOfftimer();
 			TaskInput( &gIn );
 			
 			ReadIrData( &IrCode );

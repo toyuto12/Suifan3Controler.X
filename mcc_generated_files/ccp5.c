@@ -81,8 +81,8 @@ void CCP5_Initialize(void)
     // Set the default call back function for CCP5
     CCP5_SetCallBack(CCP5_DefaultCallBack);
 
-	// Selecting Timer 1
-	CCPTMRS1bits.C5TSEL = 0x1;
+	// Selecting Timer 3
+	CCPTMRS1bits.C5TSEL = 0x2;
     
     // Clear the CCP5 interrupt flag
     PIR6bits.CCP5IF = 0;
