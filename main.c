@@ -88,28 +88,28 @@ void isrCcp1( uint16_t val ){
 // Driver
 
 stIrCommData sComm;
-uint8_t IsIrReceived,IrPos=-1;
+uint8_t IsIrReceived,IrPos=0xff;
 uint32_t IrTmp=0;
 #define T_TIMEBASE	850				// T = 425us
 void TaskIrReceive(void){
 	if( RANGE(PulseWidth, T_TIMEBASE*24, T_TIMEBASE*2)){
 			IrPos = 0;
 			PulseWidth = 0;
-	}else if( (IrPos != -1) && PulseWidth ){
+	}else if( (IrPos != 0xff) && PulseWidth ){
 		IrPos ++;
 		if( RANGE( PulseWidth, T_TIMEBASE*4, T_TIMEBASE )){
 			IrTmp = 0x80000000 | (IrTmp>>1);
 		}else if( RANGE( PulseWidth, T_TIMEBASE*2, T_TIMEBASE )){
 			IrTmp = IrTmp>>1;
 		}else{
-			IrPos = -1;
+			IrPos = 0xff;
 		}
 		PulseWidth = 0;
 		
 		if( IrPos == 32 ){
 			sComm.dat32 = IrTmp;
 			IsIrReceived = 1;
-			IrPos = -1;
+			IrPos = 0xff;
 		}
 	}
 }
