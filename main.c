@@ -158,7 +158,7 @@ void TaskInput( stInput *dat ){
 // Timer1 1SecCounterInitial
 uint16_t sOffCount;
 uint8_t isOfftimerEnd;
-#define TIMER1_1SEC		(0x86E8/120)
+#define TIMER1_1SEC		(0x86E8)
 
 uint8_t IsTime1Sec(void){
 	uint16_t tmr = TMR1;
